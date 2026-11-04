@@ -3,14 +3,14 @@
 // Pulls RAP and exists counts from the official Pet Simulator 99 API (BIG Games),
 // appends to a compact price history, and writes the JSON files the website reads.
 //
-// Usage:  node scripts/update.mjs <store-dir>
+// Usage:  node update.mjs <store-dir>
 // Env:    PS99_FIXTURES=<dir>  read API responses from local files instead (for testing)
 //         NOW_TS=<unix secs>   pretend the current time is this (for testing)
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { shardOf, SHARDS } from '../site/shard.js';
+import { shardOf, SHARDS } from './shard.js';
 
 const API = process.env.PS99_API || 'https://ps99.biggamesapi.io';
 const FIXTURES = process.env.PS99_FIXTURES;

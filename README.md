@@ -8,7 +8,7 @@ Data comes from the official [Pet Simulator 99 Public API](https://github.com/BI
 
 - Every hour, GitHub Actions runs `scripts/update.mjs`. It downloads RAP and exists counts from the API, adds them to the saved history, and rebuilds the site.
 - History is saved on a separate branch called `data`. That branch is replaced on each run, so the repository stays small.
-- History keeps every change for 48 hours, one reading per 6 hours for 30 days, and one per day after that.
+- History keeps every RAP change at 10-minute detail for 7 days, one reading per 6 hours up to 30 days, and one per day after that. Exists-only changes are saved hourly.
 - The website itself (`site/`) is plain HTML, CSS and JavaScript. GitHub Pages hosts it for free.
 
 ## One-time setup (about 10 minutes)

@@ -2,9 +2,8 @@
 // Petfolio data updater.
 // Pulls RAP and exists counts from the official Pet Simulator 99 API (BIG Games),
 // appends to a compact price history, and writes the JSON files the website reads.
-// Runs every 10 minutes; history keeps one reading per hour (later runs in the same
-// hour replace that hour's reading), so the site shows fresh values without the
-// history files growing six times faster.
+// Runs every 10 minutes. Every RAP change is kept at 10-minute detail for 7 days;
+// exists-only readings are kept hourly, then thinned out as they age (see compact()).
 //
 // Usage:  node update.mjs <store-dir>
 // Env:    PS99_FIXTURES=<dir>  read API responses from local files instead (for testing)
@@ -21,7 +20,8 @@ const STORE = path.resolve(process.argv[2] || 'store');
 const HOUR = 3600;
 const DAY = 86400;
 const NOW = Number(process.env.NOW_TS) || Math.floor(Date.now() / 1000);
-const HOUR_TS = NOW - (NOW % HOUR);
+const SLOT = 600; // one reading per 10 minutes
+const SNAP_TS = NOW - (NOW % SLOT);
 
 // ---------- fetching ----------
 
@@ -209,21 +209,31 @@ function iconFor(catalog, category, cd) {
 
 // ---------- history ----------
 
-// Keep every change for 48 hours, the last value per 6 hours for 30 days, then one per day.
+// What history keeps:
+//   last 48 hours: every reading (RAP changes at 10-minute detail, exists hourly)
+//   2 to 7 days:   every RAP change; exists-only readings one per 6 hours
+//   7 to 30 days:  one reading per 6 hours
+//   older:         one reading per day
+// The very first reading is always kept so "tracked since" stays put.
 function compact(points) {
   const out = [];
   const bucketOf = (ts) => {
-    const age = HOUR_TS - ts;
-    if (age <= 2 * DAY) return `h${ts}`;
+    const age = SNAP_TS - ts;
+    if (age <= 2 * DAY) return `s${ts}`;
     if (age <= 30 * DAY) return `q${Math.floor(ts / (6 * HOUR))}`;
     return `d${Math.floor(ts / DAY)}`;
   };
   for (let i = 0; i < points.length; i++) {
+    const p = points[i];
     const next = points[i + 1];
-    // A later point in the same bucket wins, but the very first point is always kept so
-    // "tracked since" stays put.
-    if (i > 0 && next && bucketOf(next[0]) === bucketOf(points[i][0])) continue;
-    out.push(points[i]);
+    const prev = points[i - 1];
+    const rapMove = prev && prev[1] !== p[1];
+    const keep =
+      i === 0 ||
+      !next ||
+      (rapMove && SNAP_TS - p[0] <= 7 * DAY) ||
+      bucketOf(next[0]) !== bucketOf(p[0]); // otherwise a later reading in the same bucket wins
+    if (keep) out.push(p);
   }
   return out;
 }
@@ -247,11 +257,17 @@ function lastMove(series) {
   return null;
 }
 
+// A new reading is saved whenever RAP changes. When only the exists count changed,
+// it waits until the last reading is an hour old, so history doesn't balloon.
 function addPoint(series, point) {
   const last = series.at(-1);
-  if (last && last[0] === point[0]) {
-    series[series.length - 1] = point; // re-run within the same hour
-  } else if (!last || last.slice(1).some((v, i) => v !== point[i + 1])) {
+  if (!last) {
+    series.push(point);
+  } else if (last[0] === point[0]) {
+    series[series.length - 1] = point; // re-run within the same 10 minutes
+  } else if (last[1] !== point[1]) {
+    series.push(point);
+  } else if (last[2] !== point[2] && point[0] - last[0] >= HOUR) {
     series.push(point);
   }
 }
@@ -259,7 +275,7 @@ function addPoint(series, point) {
 // ---------- main ----------
 
 async function main() {
-  console.log(`Updating snapshot for ${new Date(HOUR_TS * 1000).toISOString()}`);
+  console.log(`Updating snapshot for ${new Date(SNAP_TS * 1000).toISOString()}`);
 
   const [rapRes, existsRes] = await Promise.allSettled([api('/api/rap'), api('/api/exists')]);
   if (rapRes.status !== 'fulfilled') throw new Error(`RAP request failed: ${rapRes.reason?.message}`);
@@ -296,12 +312,12 @@ async function main() {
     const prevExists = series.at(-1)?.[2] ?? null;
     const exists = existsMap.has(key) ? existsMap.get(key) : existsRaw ? null : prevExists;
 
-    addPoint(series, [HOUR_TS, row.value, exists]);
+    addPoint(series, [SNAP_TS, row.value, exists]);
     shard[key] = compact(series);
 
-    const day = valueAt(shard[key], HOUR_TS - DAY);
+    const day = valueAt(shard[key], SNAP_TS - DAY);
     const move = lastMove(shard[key]);
-    const week = valueAt(shard[key], HOUR_TS - 7 * DAY);
+    const week = valueAt(shard[key], SNAP_TS - 7 * DAY);
     const cls = row.category === 'Pet' ? catalog.classes[cd.id] || petClassFromName(cd.id) : null;
 
     items.push({
@@ -345,7 +361,7 @@ async function main() {
   const market = await readJson('market.json', { series: [] });
   const lastMarket = market.series.at(-1);
   const point = [
-    HOUR_TS,
+    SNAP_TS,
     marketValue,
     existsRaw ? petExists.total : lastMarket?.[2] ?? null,
     existsRaw ? petExists.Huge : lastMarket?.[3] ?? null,
@@ -353,12 +369,12 @@ async function main() {
     existsRaw ? petExists.Gargantuan : lastMarket?.[5] ?? null,
     hugeIndex,
   ];
-  if (lastMarket && lastMarket[0] === HOUR_TS) market.series[market.series.length - 1] = point;
+  if (lastMarket && lastMarket[0] === SNAP_TS) market.series[market.series.length - 1] = point;
   else market.series.push(point);
   market.series = compact(market.series);
   market.fields = ['time', 'marketValue', 'petExists', 'hugeExists', 'titanicExists', 'gargantuanExists', 'hugeIndex'];
 
-  const dayAgo = valueAt(market.series, HOUR_TS - DAY);
+  const dayAgo = valueAt(market.series, SNAP_TS - DAY);
   const sentiment = {};
   for (const cls of ['Huge', 'Titanic', 'Gargantuan']) {
     const s = { up: 0, down: 0, flat: 0 };
@@ -372,7 +388,7 @@ async function main() {
   }
 
   const latest = {
-    updated: HOUR_TS,
+    updated: SNAP_TS,
     generated: NOW,
     count: items.length,
     market: {

@@ -73,7 +73,7 @@ function timeAgo(ts) {
   return `${Math.round(s / 86400)} days ago`;
 }
 const fmtDate = (ts, withTime = true) =>
-  new Date(ts * 1000).toLocaleString(undefined, withTime ? { month: 'short', day: 'numeric', hour: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
+  new Date(ts * 1000).toLocaleString(undefined, withTime ? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' } : { month: 'short', day: 'numeric', year: 'numeric' });
 
 function roman(n) {
   const map = [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];

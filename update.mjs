@@ -2,7 +2,7 @@
 // Petfolio data updater.
 // Pulls RAP and exists counts from the official Pet Simulator 99 API (BIG Games),
 // appends to a compact price history, and writes the JSON files the website reads.
-// Runs every 10 minutes. Every RAP change is kept at 10-minute detail for 7 days;
+// Runs every 5 minutes. Every RAP change is kept at 5-minute detail for 7 days;
 // exists-only readings are kept hourly, then thinned out as they age (see compact()).
 //
 // Usage:  node update.mjs <store-dir>
@@ -20,7 +20,7 @@ const STORE = path.resolve(process.argv[2] || 'store');
 const HOUR = 3600;
 const DAY = 86400;
 const NOW = Number(process.env.NOW_TS) || Math.floor(Date.now() / 1000);
-const SLOT = 600; // one reading per 10 minutes
+const SLOT = 300; // one reading per 5 minutes
 const SNAP_TS = NOW - (NOW % SLOT);
 
 // ---------- fetching ----------
@@ -210,7 +210,7 @@ function iconFor(catalog, category, cd) {
 // ---------- history ----------
 
 // What history keeps:
-//   last 48 hours: every reading (RAP changes at 10-minute detail, exists hourly)
+//   last 48 hours: every reading (RAP changes at 5-minute detail, exists hourly)
 //   2 to 7 days:   every RAP change; exists-only readings one per 6 hours
 //   7 to 30 days:  one reading per 6 hours
 //   older:         one reading per day
@@ -264,7 +264,7 @@ function addPoint(series, point) {
   if (!last) {
     series.push(point);
   } else if (last[0] === point[0]) {
-    series[series.length - 1] = point; // re-run within the same 10 minutes
+    series[series.length - 1] = point; // re-run within the same 5 minutes
   } else if (last[1] !== point[1]) {
     series.push(point);
   } else if (last[2] !== point[2] && point[0] - last[0] >= HOUR) {

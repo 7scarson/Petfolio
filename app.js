@@ -122,7 +122,7 @@ function firstSnapshot() {
 }
 
 const itemHref = (it) => `#/item/${encodeURIComponent(it.k)}`;
-// When the data was last pulled from the API (checked every 10 minutes).
+// When the data was last pulled from the API (checked every 5 minutes).
 const lastRun = () => state.latest.generated ?? state.latest.updated;
 
 // Green ▲ / red ▼ for the latest RAP move. Faded when the move is more than a day old.
@@ -909,7 +909,7 @@ async function boot() {
   for (const it of state.latest.items) state.byKey.set(it.k, it);
   state.market = await getJson('market.json').catch(() => ({ series: [] }));
   document.getElementById('updated-line').textContent =
-    `Last update ${new Date(lastRun() * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} (${timeAgo(lastRun())}). Checks for new data every 10 minutes.`;
+    `Last update ${new Date(lastRun() * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} (${timeAgo(lastRun())}). Checks for new data every 5 minutes.`;
   route();
 }
 

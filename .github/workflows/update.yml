@@ -2,7 +2,7 @@ name: Update RAP data
 
 on:
   schedule:
-    - cron: '3-59/10 * * * *' # every 10 minutes (:03, :13, :23...). GitHub can start scheduled runs a few minutes late.
+    - cron: '2-59/5 * * * *' # every 5 minutes, GitHub's fastest schedule (:02, :07, :12...). Runs can start a few minutes late when GitHub is busy.
   workflow_dispatch: # lets you run it by hand from the Actions tab
   push:
     branches: [main] # rebuild whenever you change a file

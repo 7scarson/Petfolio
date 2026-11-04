@@ -107,6 +107,12 @@ function findAsset(obj, depth = 0) {
 }
 
 const SPECIAL_COLLECTIONS = { Misc: 'MiscItems', Card: 'CardItems' };
+// Categories whose pictures live in collections with different names.
+const EXTRA_COLLECTIONS = {
+  Tool: /pickaxe|fishingrod|shovel|wateringcan|tool/i,
+  Pickaxe: /pickaxe/i,
+  Consumable: /consumable|booster/i,
+};
 
 function resolveCollection(cat, list) {
   const lower = new Map(list.map((c) => [c.toLowerCase(), c]));
@@ -131,8 +137,11 @@ function petClassFromName(name) {
   return null;
 }
 
+// Bump this to force the icon/name catalog to rebuild on the next run.
+const CATALOG_VERSION = 2;
+
 async function refreshCatalog(categories) {
-  const catalog = { updated: NOW, icons: {}, names: {}, classes: {} };
+  const catalog = { version: CATALOG_VERSION, updated: NOW, icons: {}, names: {}, classes: {}, collections: [], unmatched: [] };
   let collections = [];
   try {
     collections = await api('/api/collections');
@@ -140,9 +149,15 @@ async function refreshCatalog(categories) {
     console.warn(`Could not list collections: ${err.message}`);
     return null;
   }
+  catalog.collections = collections;
+  const jobs = [];
   for (const cat of categories) {
     const coll = resolveCollection(cat, collections);
-    if (!coll) continue;
+    const extras = EXTRA_COLLECTIONS[cat] ? collections.filter((c) => EXTRA_COLLECTIONS[cat].test(c) && c !== coll) : [];
+    if (!coll && !extras.length) catalog.unmatched.push(cat);
+    for (const c of [coll, ...extras].filter(Boolean)) jobs.push([cat, c]);
+  }
+  for (const [cat, coll] of jobs) {
     let rows;
     try {
       rows = await api(`/api/collection/${encodeURIComponent(coll)}`);
@@ -151,7 +166,8 @@ async function refreshCatalog(categories) {
       continue;
     }
     for (const row of rows || []) {
-      const id = row.configName;
+      // Non-pet collections name rows "Potion | Damage"; RAP data calls that item just "Damage".
+      const id = String(row.configName || '').replace(/^[^|]+\s\|\s/, '');
       const cd = row.configData || {};
       if (!id) continue;
       const display = cd.name || cd.DisplayName || cd.Title || cd.displayName;
@@ -166,7 +182,7 @@ async function refreshCatalog(categories) {
         if (cls) catalog.classes[id] = cls;
       } else {
         const base = findAsset(cd);
-        if (base) catalog.icons[`${cat}|${id}`] = base;
+        if (base && !catalog.icons[`${cat}|${id}`]) catalog.icons[`${cat}|${id}`] = base;
         if (Array.isArray(cd.Tiers)) {
           cd.Tiers.forEach((tier, i) => {
             const a = findAsset(tier);
@@ -184,7 +200,8 @@ function iconFor(catalog, category, cd) {
   const { icons } = catalog;
   if (category === 'Pet' && cd.pt === 1 && icons[`Pet|${cd.id}|1`]) return icons[`Pet|${cd.id}|1`];
   if (cd.tn && icons[`${category}|${cd.id}|t${cd.tn}`]) return icons[`${category}|${cd.id}|t${cd.tn}`];
-  return icons[`${category}|${cd.id}`] || null;
+  // Tower defense units share their pet's picture.
+  return icons[`${category}|${cd.id}`] || (category === 'Tower' ? icons[`Pet|${cd.id}`] : null) || null;
 }
 
 // ---------- history ----------
@@ -248,7 +265,7 @@ async function main() {
   // Catalog (icons, display names, pet classes)
   let catalog = await readJson('catalog.json', null);
   const categories = [...new Set(rapRaw.map((r) => r.category))];
-  if (!catalog || NOW - catalog.updated > DAY) {
+  if (!catalog || catalog.version !== CATALOG_VERSION || NOW - catalog.updated > DAY) {
     console.log('Refreshing icons and names...');
     catalog = (await refreshCatalog(categories)) || catalog || { updated: 0, icons: {}, names: {}, classes: {} };
   }

@@ -589,8 +589,9 @@ function filteredItems() {
   let list = state.latest.items.filter((it) => {
     if (f.cat !== 'All' && it.c !== f.cat) return false;
     if (f.cat === 'Pet' && f.cls !== 'All' && it.cl !== f.cls) return false;
-    // "Normal" means plain: no golden, no rainbow, and no shiny unless "Shiny only" is ticked.
-    if (f.variant === 'Normal' && (it.v || (it.s && !f.shiny))) return false;
+    // Picking Normal, Golden or Rainbow hides shiny versions unless "Shiny only" is ticked.
+    if (f.variant !== 'All' && it.s && !f.shiny) return false;
+    if (f.variant === 'Normal' && it.v) return false;
     if (f.variant === 'Golden' && it.v !== 1) return false;
     if (f.variant === 'Rainbow' && it.v !== 2) return false;
     if (f.shiny && !it.s) return false;

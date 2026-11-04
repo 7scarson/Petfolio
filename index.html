@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Petfolio · PS99 RAP Tracker</title>
+  <meta name="description" content="Hourly RAP and exists tracker for every Pet Simulator 99 pet and item, with price history charts and daily movers.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#/" aria-label="Petfolio home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 28 12 16 29 4 12Z" fill="var(--accent)"/><path d="M4 12h24L16 29Z" fill="var(--accent-deep)"/><path d="M10 12 16 3l6 9Z" fill="var(--accent-light)"/></svg>
+        <span class="brand-name">Petfolio</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="#/" data-nav="home">Market</a>
+        <a href="#/items" data-nav="items">Items</a>
+        <a href="#/bookmarks" data-nav="bookmarks">Bookmarks</a>
+      </nav>
+      <label class="search">
+        <span class="visually-hidden">Search items</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m13 13 4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="search" type="search" placeholder="Search pets and items" autocomplete="off" spellcheck="false">
+        <kbd>/</kbd>
+      </label>
+    </div>
+  </header>
+
+  <main id="view" class="wrap" tabindex="-1">
+    <p class="loading">Loading market data…</p>
+  </main>
+
+  <footer class="footer wrap">
+    <p id="updated-line">Updates every hour.</p>
+    <p>Data from the official <a href="https://github.com/BIG-Games-LLC/ps99-public-api-docs" target="_blank" rel="noopener">Pet Simulator 99 Public API</a> by BIG Games. Petfolio is a free, non-commercial fan project and is not affiliated with or endorsed by BIG Games or Roblox.</p>
+    <p class="muted">The API refreshes RAP about every 4 hours, so RAP can stay flat between some hourly updates. Exists counts refresh hourly.</p>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

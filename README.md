@@ -1,6 +1,6 @@
 # Petfolio
 
-A free fan-made tracker for **Pet Simulator 99**: RAP (recent average price) and exists counts for every tradeable pet and item, refreshed every hour, with price history charts, daily movers and market totals.
+A free fan-made tracker for **Pet Simulator 99**: RAP (recent average price) and exists counts for every tradeable pet and item, checked every 10 minutes, with price history charts, daily movers and market totals.
 
 Data comes from the official [Pet Simulator 99 Public API](https://github.com/BIG-Games-LLC/ps99-public-api-docs) by BIG Games. Under the API's [terms](https://github.com/BIG-Games-LLC/ps99-public-api-docs/blob/master/TERMS.md) this site must stay **non-commercial** (no ads, donations or paid features) and must credit Pet Simulator 99 and its developers, which the footer does.
 
@@ -22,7 +22,7 @@ Data comes from the official [Pet Simulator 99 Public API](https://github.com/BI
 
    `https://<your-github-username>.github.io/petfolio/`
 
-After that it updates itself every hour. GitHub sometimes starts scheduled runs a few minutes late.
+After that it updates itself every 10 minutes. GitHub sometimes starts scheduled runs a few minutes late.
 
 ## If something goes wrong
 
@@ -33,7 +33,7 @@ After that it updates itself every hour. GitHub sometimes starts scheduled runs 
 
 ## Things to know
 
-- The API caches RAP for about 4 hours, so RAP often stays flat between hourly runs. Exists counts change hourly.
+- The API caches RAP for about 4 hours, so RAP often stays the same across several runs. Exists counts change every 10 minutes.
 - Charts, 24h and 7d changes, movers and sentiment fill in as history builds. 24h numbers appear after the first day; 7d after the first week.
 - Bookmarks are saved in each visitor's own browser.
 - Item pictures load from the API's official image service. Golden pets use their golden art, rainbow pets cycle colors and shiny pets get a sparkle, like in game. If a picture can't load, the item's first letter shows instead.

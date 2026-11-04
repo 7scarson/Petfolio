@@ -2,6 +2,9 @@
 // Petfolio data updater.
 // Pulls RAP and exists counts from the official Pet Simulator 99 API (BIG Games),
 // appends to a compact price history, and writes the JSON files the website reads.
+// Runs every 10 minutes; history keeps one reading per hour (later runs in the same
+// hour replace that hour's reading), so the site shows fresh values without the
+// history files growing six times faster.
 //
 // Usage:  node update.mjs <store-dir>
 // Env:    PS99_FIXTURES=<dir>  read API responses from local files instead (for testing)

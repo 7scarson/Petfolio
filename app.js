@@ -122,6 +122,8 @@ function firstSnapshot() {
 }
 
 const itemHref = (it) => `#/item/${encodeURIComponent(it.k)}`;
+// When the data was last pulled from the API (checked every 10 minutes).
+const lastRun = () => state.latest.generated ?? state.latest.updated;
 
 // Green ▲ / red ▼ for the latest RAP move. Faded when the move is more than a day old.
 function moveText(it) {
@@ -220,7 +222,7 @@ function marketColumn(idx, days = 7) {
 }
 
 function renderHome() {
-  const { market, sentiment, updated, count } = state.latest;
+  const { market, sentiment, count } = state.latest;
   const ch = market.change24h || {};
   const tip = (t) => `<span class="tip" title="${esc(t)}">?</span>`;
 
@@ -239,7 +241,7 @@ function renderHome() {
           <p class="eyebrow">Pet Simulator 99 market</p>
           <h1>Every pet and item, priced hourly</h1>
         </div>
-        <span class="muted">${count.toLocaleString()} items · updated ${timeAgo(updated)}</span>
+        <span class="muted">${count.toLocaleString()} items · updated ${timeAgo(lastRun())}</span>
       </div>
     </section>
 
@@ -622,7 +624,7 @@ function renderItems() {
   view.innerHTML = `
     <div class="section-head">
       <div><p class="eyebrow">All tradeable items</p><h1>Items</h1></div>
-      <span class="muted">Updated ${timeAgo(state.latest.updated)}</span>
+      <span class="muted">Updated ${timeAgo(lastRun())}</span>
     </div>
     <section class="panel">
       <div class="filters">
@@ -907,7 +909,7 @@ async function boot() {
   for (const it of state.latest.items) state.byKey.set(it.k, it);
   state.market = await getJson('market.json').catch(() => ({ series: [] }));
   document.getElementById('updated-line').textContent =
-    `Last update ${fmtDate(state.latest.updated)} (${timeAgo(state.latest.updated)}). Updates every hour.`;
+    `Last update ${new Date(lastRun() * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} (${timeAgo(lastRun())}). Checks for new data every 10 minutes.`;
   route();
 }
 

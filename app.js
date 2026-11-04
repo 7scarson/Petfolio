@@ -413,9 +413,9 @@ function drawBookmarkGrid() {
     <article class="bm-card">
       <a class="bm-link" href="${itemHref(it)}">
         <div class="bm-top">${iconHtml(it, 'icon-md')}<div class="bm-name"><b>${esc(displayName(it))}</b>${badgesHtml(it)}</div></div>
-        <div class="bm-value">${rapHtml(it, { unit: true })}<span class="bm-change" data-change="${esc(it.k)}">${pctHtml(range === '1D' ? it.d1 : range === '7D' ? it.d7 : null, { plain: true })}</span></div>
+        <div class="bm-value">${rapHtml(it, { unit: true })}<span class="bm-change" title="${esc(moveText(it) || 'RAP has not changed since tracking started')}">${it.m && it.m[1] ? pctHtml(it.m[1], { plain: true }) : '<span class="flat">—</span>'}</span></div>
         <div class="bm-spark" data-spark="${esc(it.k)}"><span class="bm-loading">Loading ${range} history…</span></div>
-        <div class="bm-foot"><span>${compact(it.e)} exist</span><span>${range} change</span></div>
+        <div class="bm-foot"><span>${compact(it.e)} exist</span><span>${it.m && it.m[1] ? `vs last RAP · ${shortTime(it.m[0])}` : 'No RAP change yet'}</span></div>
       </a>
       ${starHtml(it)}
     </article>`).join('')}</div>`;
@@ -423,14 +423,19 @@ function drawBookmarkGrid() {
   for (const it of list) {
     history(it.k).then((points) => {
       const spark = grid.querySelector(`[data-spark="${CSS.escape(it.k)}"]`);
-      const change = grid.querySelector(`[data-change="${CSS.escape(it.k)}"]`);
       if (!spark) return;
       const ranged = sliceRange(points, range);
       const svg = sparkline(ranged.map((p) => p[1]), 48);
-      spark.innerHTML = svg || '<span class="bm-loading">History builds up as hourly updates come in.</span>';
-      if (ranged.length >= 2 && change) change.innerHTML = pctHtml(pctChange(ranged[0][1], ranged.at(-1)[1]), { plain: true });
+      spark.innerHTML = svg || '<span class="bm-loading">History builds up as updates come in.</span>';
     });
   }
+}
+
+// "5:12 PM" for today, "Nov 3, 5:12 PM" for older times.
+function shortTime(ts) {
+  const d = new Date(ts * 1000);
+  const today = new Date().toDateString() === d.toDateString();
+  return d.toLocaleString(undefined, today ? { hour: 'numeric', minute: '2-digit' } : { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 const pctChange = (from, to) => (from > 0 && to != null ? ((to - from) / from) * 100 : null);

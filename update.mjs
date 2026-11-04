@@ -236,6 +236,14 @@ function valueAt(points, ts) {
 
 const pct = (now, then) => (then && then > 0 && now != null ? Math.round(((now - then) / then) * 10000) / 100 : null);
 
+// The most recent time RAP actually changed: [time, percent change from the value before it].
+function lastMove(series) {
+  for (let i = series.length - 1; i > 0; i--) {
+    if (series[i][1] !== series[i - 1][1]) return [series[i][0], pct(series[i][1], series[i - 1][1])];
+  }
+  return null;
+}
+
 function addPoint(series, point) {
   const last = series.at(-1);
   if (last && last[0] === point[0]) {
@@ -289,6 +297,7 @@ async function main() {
     shard[key] = compact(series);
 
     const day = valueAt(shard[key], HOUR_TS - DAY);
+    const move = lastMove(shard[key]);
     const week = valueAt(shard[key], HOUR_TS - 7 * DAY);
     const cls = row.category === 'Pet' ? catalog.classes[cd.id] || petClassFromName(cd.id) : null;
 
@@ -306,6 +315,7 @@ async function main() {
       d1: pct(row.value, day?.[1]),
       d7: pct(row.value, week?.[1]),
       e1: day && day[2] != null && exists != null ? exists - day[2] : null,
+      ...(move && move[1] != null ? { m: move } : {}),
       f: shard[key][0][0],
     });
   }

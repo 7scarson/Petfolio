@@ -123,6 +123,24 @@ function firstSnapshot() {
 
 const itemHref = (it) => `#/item/${encodeURIComponent(it.k)}`;
 
+// Green ▲ / red ▼ for the latest RAP move. Faded when the move is more than a day old.
+function moveText(it) {
+  if (!it.m || !it.m[1]) return null;
+  const [t, p] = it.m;
+  const prev = it.r / (1 + p / 100);
+  return `${p > 0 ? 'Up' : 'Down'} ${Math.abs(p) >= 100 ? Math.round(Math.abs(p)) : Math.abs(p).toFixed(1)}% from ${compact(prev)} · ${fmtDate(t)}`;
+}
+function moveHtml(it) {
+  const text = moveText(it);
+  if (!text) return '';
+  const up = it.m[1] > 0;
+  const old = state.latest && state.latest.updated - it.m[0] > DAY;
+  return `<span class="move ${up ? 'up' : 'down'}${old ? ' old' : ''}" title="${esc(text)}" role="img" aria-label="${esc(text)}">${up ? '▲' : '▼'}</span>`;
+}
+function rapHtml(it, { long = false, unit = false, move = true } = {}) {
+  return `<span class="rap"><span class="num" title="${full(it.r)} RAP">${long ? full(it.r) : compact(it.r)}</span>${unit ? '<span class="rap-unit">RAP</span>' : ''}${move ? moveHtml(it) : ''}</span>`;
+}
+
 // Swap broken icons for an initial letter.
 document.addEventListener('error', (e) => {
   const img = e.target;
@@ -287,7 +305,7 @@ function renderHome() {
       .sort((a, b) => (moverDir === 'up' ? b.d1 - a.d1 : a.d1 - b.d1))
       .slice(0, 12);
     document.getElementById('movers').innerHTML = list.length
-      ? list.map((it) => `<li><a href="${itemHref(it)}">${iconHtml(it)}<span style="min-width:0"><span class="mover-name" style="display:block">${esc(displayName(it))}</span><span class="mover-rap num">${compact(it.r)} RAP</span></span><span class="mover-change">${pctHtml(it.d1, { plain: true })}</span></a></li>`).join('')
+      ? list.map((it) => `<li><a href="${itemHref(it)}">${iconHtml(it)}<span style="min-width:0"><span class="mover-name" style="display:block">${esc(displayName(it))}</span><span class="mover-rap">${rapHtml(it, { unit: true })}</span></span><span class="mover-change">${pctHtml(it.d1, { plain: true })}</span></a></li>`).join('')
       : `<li class="muted" style="padding:8px">${state.latest.updated - firstSnapshot() < DAY ? 'Movers appear once the tracker has 24 hours of history.' : `No ${moverClass} ${moverDir === 'up' ? 'gainers' : 'losers'} in the last 24 hours.`}</li>`;
   };
 
@@ -393,7 +411,7 @@ function drawBookmarkGrid() {
     <article class="bm-card">
       <a class="bm-link" href="${itemHref(it)}">
         <div class="bm-top">${iconHtml(it, 'icon-md')}<div class="bm-name"><b>${esc(displayName(it))}</b>${badgesHtml(it)}</div></div>
-        <div class="bm-value"><span class="num" title="${full(it.r)} RAP">${compact(it.r)}</span><span class="bm-unit">RAP</span><span class="bm-change" data-change="${esc(it.k)}">${pctHtml(range === '1D' ? it.d1 : range === '7D' ? it.d7 : null, { plain: true })}</span></div>
+        <div class="bm-value">${rapHtml(it, { unit: true })}<span class="bm-change" data-change="${esc(it.k)}">${pctHtml(range === '1D' ? it.d1 : range === '7D' ? it.d7 : null, { plain: true })}</span></div>
         <div class="bm-spark" data-spark="${esc(it.k)}"><span class="bm-loading">Loading ${range} history…</span></div>
         <div class="bm-foot"><span>${compact(it.e)} exist</span><span>${range} change</span></div>
       </a>
@@ -443,7 +461,7 @@ function bindHomeBookmarks() {
       ? results.map((it, i) => {
           const on = state.favs.has(it.k);
           return `<li id="bm-opt-${i}" role="option" aria-selected="${i === active}" data-i="${i}" class="${i === active ? 'active' : ''}">
-            ${iconHtml(it)}<span class="bm-opt-name">${esc(displayName(it))}<small class="num">${compact(it.r)} RAP</small></span>
+            ${iconHtml(it)}<span class="bm-opt-name">${esc(displayName(it))}<small>${rapHtml(it, { unit: true })}</small></span>
             <span class="bm-opt-action">${on ? '★ Added' : '+ Add'}</span></li>`;
         }).join('')
       : '<li class="bm-none" role="option" aria-disabled="true">No matching pets or items</li>';
@@ -517,7 +535,7 @@ function tableHtml(items, { rank = false, sortable = false, offset = 0 } = {}) {
       ${rank ? `<td class="rank hide-sm">${offset + i + 1}</td>` : ''}
       <td class="name"><div class="item-cell">${iconHtml(it)}<div><a href="${itemHref(it)}">${esc(displayName(it))}</a>${badgesHtml(it)}</div></div></td>
       <td class="hide-sm muted">${esc(catLabel(it.c))}</td>
-      <td class="r num" title="${full(it.r)}">${compact(it.r)}</td>
+      <td class="r">${rapHtml(it)}</td>
       <td class="r">${pctHtml(it.d1, { plain: true })}</td>
       <td class="r hide-sm">${pctHtml(it.d7, { plain: true })}</td>
       <td class="r num hide-sm" title="${full(it.e)}">${compact(it.e)}</td>
@@ -708,7 +726,8 @@ async function renderItem(key) {
       ${bookmarkButtonHtml(it)}
     </section>
     <dl class="kv">
-      <div><dt>RAP</dt><dd title="${full(it.r)}">${full(it.r)}</dd></div>
+      <div><dt>RAP</dt><dd>${rapHtml(it, { long: true, move: false })}</dd></div>
+      <div><dt>Last RAP move</dt><dd class="last-move">${it.m && it.m[1] ? `${pctHtml(it.m[1])}<small>${fmtDate(it.m[0])}</small>` : '<span class="flat">No change yet</span>'}</dd></div>
       <div><dt>24h</dt><dd>${pctHtml(it.d1)}</dd></div>
       <div><dt>7d</dt><dd>${pctHtml(it.d7)}</dd></div>
       <div><dt>Exists</dt><dd title="${full(it.e)}">${full(it.e)} ${it.e1 ? `<small>${deltaHtml(it.e1)}</small>` : ''}</dd></div>
@@ -734,7 +753,7 @@ async function renderItem(key) {
       <section>
         <h2>Other versions</h2>
         <div class="variants">${siblings.map((o) => `
-          <a class="variant" href="${itemHref(o)}" ${o.k === it.k ? 'aria-current="page"' : ''}>${iconHtml(o)}<div><b>${esc(displayName(o))}</b><span class="num">${compact(o.r)} RAP · ${compact(o.e)} exist</span></div></a>`).join('')}
+          <a class="variant" href="${itemHref(o)}" ${o.k === it.k ? 'aria-current="page"' : ''}>${iconHtml(o)}<div><b>${esc(displayName(o))}</b><span class="variant-meta">${rapHtml(o, { unit: true })}<span class="num">· ${compact(o.e)} exist</span></span></div></a>`).join('')}
         </div>
       </section>` : ''}
   `;

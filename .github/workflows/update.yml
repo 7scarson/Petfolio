@@ -1,0 +1,78 @@
+name: Update RAP data
+
+on:
+  schedule:
+    - cron: '17 * * * *' # every hour at :17 (GitHub can start scheduled runs a few minutes late)
+  workflow_dispatch: # lets you run it by hand from the Actions tab
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'scripts/**'
+      - '.github/workflows/**'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Load saved history from the data branch
+        run: |
+          mkdir -p store
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git fetch --depth=1 origin data
+            git archive FETCH_HEAD | tar -x -C store
+            echo "Loaded existing history."
+          else
+            echo "No data branch yet; starting fresh."
+          fi
+
+      - name: Pull the latest RAP and exists counts
+        run: node scripts/update.mjs store
+
+      - name: Save history to the data branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd store
+          git init -q -b data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Data snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
+          # The data branch is replaced each run (one commit), so the repo doesn't grow forever.
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
+
+      - name: Build the site
+        run: |
+          mkdir -p _site/data
+          cp -r site/. _site/
+          cp store/latest.json store/market.json _site/data/
+          cp -r store/history _site/data/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

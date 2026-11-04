@@ -5,11 +5,7 @@ on:
     - cron: '17 * * * *' # every hour at :17 (GitHub can start scheduled runs a few minutes late)
   workflow_dispatch: # lets you run it by hand from the Actions tab
   push:
-    branches: [main]
-    paths:
-      - 'site/**'
-      - 'scripts/**'
-      - '.github/workflows/**'
+    branches: [main] # rebuild whenever you change a file
 
 permissions:
   contents: write
@@ -46,7 +42,7 @@ jobs:
           fi
 
       - name: Pull the latest RAP and exists counts
-        run: node scripts/update.mjs store
+        run: node update.mjs store
 
       - name: Save history to the data branch
         env:
@@ -64,7 +60,7 @@ jobs:
       - name: Build the site
         run: |
           mkdir -p _site/data
-          cp -r site/. _site/
+          cp index.html app.js styles.css shard.js favicon.svg _site/
           cp store/latest.json store/market.json _site/data/
           cp -r store/history _site/data/
 

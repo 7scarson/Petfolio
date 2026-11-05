@@ -367,6 +367,9 @@ async function main() {
     shard[key] = compact(series);
 
     const day = valueAt(shard[key], SNAP_TS - DAY);
+    // RAP from `span` seconds ago. If the item has been tracked for less than that,
+    // fall back to its first reading so new items and a young tracker still get a number.
+    const rapAgo = (span) => (valueAt(shard[key], SNAP_TS - span) ?? shard[key][0])[1];
     const move = lastMove(shard[key]);
     const week = valueAt(shard[key], SNAP_TS - 7 * DAY);
     const cls = row.category === 'Pet' ? catalog.classes[cd.id] || petClassFromName(cd.id) : null;
@@ -382,7 +385,9 @@ async function main() {
       r: row.value,
       e: exists,
       i: iconFor(catalog, row.category, cd),
-      d1: pct(row.value, day?.[1]),
+      h1: pct(row.value, rapAgo(HOUR)),
+      d12: pct(row.value, rapAgo(12 * HOUR)),
+      d1: pct(row.value, rapAgo(DAY)),
       d7: pct(row.value, week?.[1]),
       e1: day && day[2] != null && exists != null ? exists - day[2] : null,
       ...(move && move[1] != null ? { m: move } : {}),

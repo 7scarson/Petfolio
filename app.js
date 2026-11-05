@@ -496,14 +496,23 @@ function drawBookmarkGrid() {
 }
 
 // One item card: picture, name, RAP with its last move, a mini chart, exists.
-function cardHtml(it, range) {
+// Cards normally show the change from the previous RAP. When the grid is sorted by a
+// time window (1h, 12h, 24h), they show that window's change instead.
+const WINDOW_SORTS = { h1: '1h', d12: '12h', d1: '24h' };
+
+function cardHtml(it, range, sort) {
+  const win = WINDOW_SORTS[sort];
+  const change = win
+    ? `<span class="bm-change" title="RAP change over the last ${win}">${it[sort] != null ? pctHtml(it[sort], { plain: true }) : '<span class="flat">—</span>'}</span>`
+    : `<span class="bm-change" title="${esc(moveText(it) || 'RAP has not changed since tracking started')}">${it.m && it.m[1] ? pctHtml(it.m[1], { plain: true }) : '<span class="flat">—</span>'}</span>`;
+  const foot = win ? `${win} change` : it.m && it.m[1] ? `vs last RAP · ${shortTime(it.m[0])}` : 'No RAP change yet';
   return `
     <article class="bm-card">
       <a class="bm-link" href="${itemHref(it)}">
         <div class="bm-top">${iconHtml(it, 'icon-md')}<div class="bm-name"><b>${esc(displayName(it))}</b>${badgesHtml(it)}</div></div>
-        <div class="bm-value">${rapHtml(it, { unit: true })}<span class="bm-change" title="${esc(moveText(it) || 'RAP has not changed since tracking started')}">${it.m && it.m[1] ? pctHtml(it.m[1], { plain: true }) : '<span class="flat">—</span>'}</span></div>
+        <div class="bm-value">${rapHtml(it, { unit: true })}${change}</div>
         <div class="bm-spark" data-spark="${esc(it.k)}"><span class="bm-loading">Loading ${range} history…</span></div>
-        <div class="bm-foot"><span>${compact(it.e)} exist</span><span>${it.m && it.m[1] ? `vs last RAP · ${shortTime(it.m[0])}` : 'No RAP change yet'}</span></div>
+        <div class="bm-foot"><span>${compact(it.e)} exist</span><span>${foot}</span></div>
       </a>
       ${starHtml(it)}
     </article>`;
@@ -517,7 +526,9 @@ const ALL_SORTS = [
   ['mu', 'Biggest last rise'],
   ['md', 'Biggest last drop'],
   ['recent', 'Most recently moved'],
-  ['d1', 'Best 24h'],
+  ['h1', 'Best 1h (% up)'],
+  ['d12', 'Best 12h (% up)'],
+  ['d1', 'Best 24h (% up)'],
   ['e', 'Most exist'],
   ['n', 'Name A–Z'],
 ];
@@ -589,11 +600,23 @@ function allItemsList() {
     mu: (x, y) => mv(y) - mv(x) || y.r - x.r,
     md: (x, y) => mv(x) - mv(y) || y.r - x.r,
     recent: (x, y) => ((y.m && y.m[0]) || 0) - ((x.m && x.m[0]) || 0) || y.r - x.r,
+    h1: (x, y) => (y.h1 ?? -Infinity) - (x.h1 ?? -Infinity) || y.r - x.r,
+    d12: (x, y) => (y.d12 ?? -Infinity) - (x.d12 ?? -Infinity) || y.r - x.r,
     d1: (x, y) => (y.d1 ?? -Infinity) - (x.d1 ?? -Infinity) || y.r - x.r,
     e: (x, y) => (y.e ?? -1) - (x.e ?? -1),
     n: (x, y) => displayName(x).localeCompare(displayName(y)),
   };
   return list.sort(sorters[a.sort] || sorters.r);
+}
+
+// While the tracker is younger than the chosen window, say what the numbers cover.
+function windowNote(sort) {
+  const win = WINDOW_SORTS[sort];
+  if (!win) return '';
+  const spanH = { '1h': 1, '12h': 12, '24h': 24 }[win];
+  const trackedH = (state.latest.updated - firstSnapshot()) / 3600;
+  if (trackedH >= spanH) return '';
+  return `<p class="muted window-note">Tracking started ${Math.max(1, Math.floor(trackedH))} hour${Math.floor(trackedH) === 1 ? '' : 's'} ago, so "${win}" changes cover that shorter period for now.</p>`;
 }
 
 function drawAllGrid() {
@@ -603,7 +626,7 @@ function drawAllGrid() {
   const list = allItemsList();
   const shown = list.slice(0, a.shown);
   grid.innerHTML = shown.length
-    ? `<div class="bm-grid">${shown.map((it) => cardHtml(it, a.range)).join('')}</div>`
+    ? `${windowNote(a.sort)}<div class="bm-grid">${shown.map((it) => cardHtml(it, a.range, a.sort)).join('')}</div>`
     : '<p class="empty">No pets or items match.</p>';
   document.getElementById('all-more').innerHTML = list.length > shown.length
     ? `<span>Showing ${shown.length.toLocaleString()} of ${list.length.toLocaleString()}</span><button class="btn" type="button" id="all-more-btn">Show ${Math.min(48, list.length - shown.length)} more</button>`

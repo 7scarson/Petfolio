@@ -635,6 +635,19 @@ th button.sort[data-active="true"] { color: var(--accent); }
 .all-more { display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 16px; font-size: 13px; color: var(--muted); }
 .all-more:empty { display: none; }
 
+/* ---------- demand signal ---------- */
+.demand { padding: 14px 16px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: center; border-left: 4px solid var(--line); }
+.demand p { margin: 0; }
+.demand-how { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.demand-pill { font: 700 13px var(--font-body); padding: 5px 11px; border-radius: 999px; white-space: nowrap; background: var(--surface-2); color: var(--muted); }
+.demand-strong { border-left-color: var(--gain); }
+.demand-strong .demand-pill { background: var(--gain-soft); color: var(--gain); }
+.demand-weak { border-left-color: var(--loss); }
+.demand-weak .demand-pill { background: var(--loss-soft); color: var(--loss); }
+.demand-steady { border-left-color: var(--accent); }
+.demand-steady .demand-pill { background: var(--accent-soft); color: var(--accent); }
+@media (max-width: 560px) { .demand { grid-template-columns: minmax(0, 1fr); } .demand-pill { justify-self: start; } }
+
 /* ---------- footer ---------- */
 .footer {
   border-top: 1px solid var(--line);

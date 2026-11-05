@@ -351,6 +351,46 @@ function bindSeg(id, onChange) {
   });
 }
 
+// ---------- demand signal ----------
+const DEMAND_LABELS = { strong: 'Strong demand', steady: 'Steady demand', weak: 'Weak demand', quiet: 'Too quiet to judge' };
+
+function spanText(secs) {
+  const h = Math.round(secs / 3600);
+  return h >= 23 ? 'the last 24 hours' : `the last ${h} hour${h === 1 ? '' : 's'}`;
+}
+const absPct = (p) => `${Math.abs(p).toFixed(Math.abs(p) >= 10 ? 0 : 1)}%`;
+function signedPct(p) {
+  const text = absPct(p);
+  if (text === '0.0%') return text;
+  return `${p > 0 ? '+' : '−'}${text}`;
+}
+
+function demandHtml(it) {
+  if (!it.dm) return '';
+  const [label, rapPct, existsPct, added, span] = it.dm;
+  const when = spanText(span);
+  const copies = `${Math.abs(added).toLocaleString()} ${Math.abs(added) === 1 ? 'copy' : 'copies'}`;
+  const supply = added > 0 ? `${copies} were added (${signedPct(existsPct)})` : added < 0 ? `${copies} left the game (${signedPct(existsPct)})` : 'no new copies appeared';
+  let text;
+  if (label === 'quiet') {
+    text = `RAP hasn't changed in ${when}, so there hasn't been enough trading to judge demand. Meanwhile ${supply}.`;
+  } else if (label === 'strong' && rapPct >= 2) {
+    text = `RAP rose ${absPct(rapPct)} in ${when}${added > 0 ? `, even though ${supply}` : ''}. Buyers are paying more.`;
+  } else if (label === 'strong') {
+    text = `RAP held steady (${signedPct(rapPct)}) in ${when} while ${supply}. Buyers are absorbing the new supply.`;
+  } else if (label === 'weak') {
+    text = `RAP fell ${absPct(rapPct)} in ${when}${added > 0 ? ` as ${supply}. Supply is outpacing buyers.` : '. Buyers aren\'t willing to pay the old price.'}`;
+  } else {
+    text = `RAP moved ${signedPct(rapPct)} in ${when} and ${supply}. Buyers and sellers are roughly balanced.`;
+  }
+  return `
+    <section class="panel demand demand-${label}" aria-label="Demand signal">
+      <span class="demand-pill">${DEMAND_LABELS[label]}</span>
+      <p>${esc(text)}</p>
+      <p class="demand-how">Compares the RAP change with the change in copies that exist over the last 24 hours (or since tracking started). Strong: RAP up 2% or more, or holding within 2% while supply grows 2% or more. Weak: RAP down 2% or more.</p>
+    </section>`;
+}
+
 // ---------- variant filter (shared by the Items table and Market cards) ----------
 const VARIANTS = ['All', 'Normal', 'Golden', 'Rainbow'];
 // Picking Normal, Golden or Rainbow hides shiny versions unless "Shiny only" is ticked.
@@ -897,6 +937,7 @@ async function renderItem(key) {
       <div><dt>Total value</dt><dd title="${full(value)}">${compact(value)}</dd></div>
       <div><dt>Tracked since</dt><dd style="font-size:15px">${fmtDate(it.f, false)}</dd></div>
     </dl>
+    ${demandHtml(it)}
     <section class="charts">
       <div class="panel chart-panel">
         <div class="section-head" style="margin:0">

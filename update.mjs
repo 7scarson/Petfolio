@@ -281,6 +281,32 @@ function lastMove(series) {
   return null;
 }
 
+// ---------- demand signal ----------
+// Compares how RAP moved with how supply (exists) moved over the last 24 hours, or since
+// tracking began if that's shorter (at least an hour). Returns
+// [label, RAP % change, exists % change, copies added, window in seconds] or null.
+//   strong: RAP rose 2%+, or held within 2% while supply grew 2%+ (buyers absorbing it)
+//   weak:   RAP fell 2%+
+//   steady: anything in between
+//   quiet:  RAP never changed in the window, so there's too little trading to judge
+function demandSignal(series, move, rap, exists) {
+  if (exists == null || !series.length) return null;
+  const start = Math.max(SNAP_TS - DAY, series[0][0]);
+  const span = SNAP_TS - start;
+  if (span < HOUR) return null;
+  const then = valueAt(series, start);
+  if (!then || then[2] == null) return null;
+  const rapPct = pct(rap, then[1]) ?? 0;
+  const added = exists - then[2];
+  const existsPct = pct(exists, then[2]) ?? 0;
+  let label;
+  if (!move || move[0] <= start) label = 'quiet';
+  else if (rapPct >= 2 || (rapPct > -2 && existsPct >= 2)) label = 'strong';
+  else if (rapPct <= -2) label = 'weak';
+  else label = 'steady';
+  return [label, rapPct, existsPct, added, span];
+}
+
 // A new reading is saved whenever RAP changes. When only the exists count changed,
 // it waits until the last reading is an hour old, so history doesn't balloon.
 function addPoint(series, point) {
@@ -360,6 +386,7 @@ async function main() {
       d7: pct(row.value, week?.[1]),
       e1: day && day[2] != null && exists != null ? exists - day[2] : null,
       ...(move && move[1] != null ? { m: move } : {}),
+      ...((dm) => (dm ? { dm } : {}))(demandSignal(shard[key], move, row.value, exists)),
       f: shard[key][0][0],
     });
     for (const [range, [span, count]] of Object.entries(SPARK_RANGES)) sparks[range].push(sparkString(shard[key], span, count));

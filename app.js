@@ -985,7 +985,7 @@ function drawChart(el, pts, { color, label }) {
         <line y1="${pad.t}" y2="${H - pad.b}" stroke="var(--muted)" stroke-dasharray="3 3"/>
         <circle r="4.5" fill="var(--surface)" stroke="${color}" stroke-width="2"/>
       </g>
-      <rect x="${pad.l}" y="0" width="${W - pad.l - pad.r}" height="${H}" fill="transparent" class="hit"/>
+      <rect x="${pad.l}" y="0" width="${W - pad.l}" height="${H}" fill="transparent" class="hit"/>
     </svg>
     <div class="chart-tip" hidden></div>`;
 
@@ -996,10 +996,17 @@ function drawChart(el, pts, { color, label }) {
   const move = (e) => {
     const rect = svg.getBoundingClientRect();
     const px = ((e.clientX - rect.left) / rect.width) * W;
-    const t = x0 + ((px - pad.l) / (W - pad.l - pad.r)) * (x1 - x0);
+    let t = x0 + ((px - pad.l) / (W - pad.l - pad.r)) * (x1 - x0);
     let idx = 0;
     for (let i = 0; i < xs.length; i++) if (xs[i] <= t) idx = i;
-    const cx = Math.max(pad.l, Math.min(W - pad.r, px));
+    let cx = Math.max(pad.l, Math.min(W - pad.r, px));
+    // Near the right edge, snap to the latest reading so it can always be hovered,
+    // even when it changed in the most recent update (a step with no width yet).
+    if (px >= sx(x1) - 12) {
+      idx = xs.length - 1;
+      t = x1;
+      cx = sx(x1);
+    }
     const cy = sy(ys[idx]);
     hover.setAttribute('visibility', 'visible');
     hover.querySelector('line').setAttribute('x1', cx);
@@ -1009,6 +1016,9 @@ function drawChart(el, pts, { color, label }) {
     tipEl.hidden = false;
     tipEl.style.left = `${(cx / W) * 100}%`;
     tipEl.style.top = `${(cy / H) * 100}%`;
+    // Keep the tooltip inside the chart near either edge.
+    const side = cx / W;
+    tipEl.style.transform = `translate(${side > 0.8 ? '-100%' : side < 0.2 ? '0%' : '-50%'}, calc(-100% - 10px))`;
     tipEl.innerHTML = `${label} ${full(ys[idx])}<span>${fmtDate(Math.min(t, x1))}</span>`;
   };
   hit.addEventListener('pointermove', move);

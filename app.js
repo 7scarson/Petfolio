@@ -17,7 +17,7 @@ const state = {
   filters: { q: '', cat: 'All', cls: 'All', variant: 'All', shiny: false, sort: 'r', dir: -1, page: 0 },
   home: { moverClass: 'Huge', moverDir: 'up', sentClass: 'Huge', bmRange: loadStore('petfolio:bmRange', '7D') },
   chartRange: loadStore('petfolio:range', '7D'),
-  all: { range: loadStore('petfolio:allRange', '1D'), cat: 'All', sort: 'r', q: '', shown: 48 },
+  all: { range: loadStore('petfolio:allRange', '1D'), cat: 'All', variant: 'All', shiny: false, sort: 'r', q: '', shown: 48 },
   sparks: new Map(), // range -> Promise<string[] | null>
 };
 
@@ -351,6 +351,18 @@ function bindSeg(id, onChange) {
   });
 }
 
+// ---------- variant filter (shared by the Items table and Market cards) ----------
+const VARIANTS = ['All', 'Normal', 'Golden', 'Rainbow'];
+// Picking Normal, Golden or Rainbow hides shiny versions unless "Shiny only" is ticked.
+function variantMatches(it, variant, shinyOnly) {
+  if (variant !== 'All' && it.s && !shinyOnly) return false;
+  if (variant === 'Normal' && it.v) return false;
+  if (variant === 'Golden' && it.v !== 1) return false;
+  if (variant === 'Rainbow' && it.v !== 2) return false;
+  if (shinyOnly && !it.s) return false;
+  return true;
+}
+
 // ---------- search matching ----------
 const searchWords = (q) => String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
 function matches(it, words) {
@@ -483,6 +495,11 @@ function allItemsHtml() {
         <label class="all-select"><span>Sort</span>
           <select id="all-sort">${ALL_SORTS.map(([v, l]) => opt(v, l, a.sort)).join('')}</select></label>
       </div>
+      <div class="filter-row all-variants" id="all-variant">
+        <span class="filter-label">Variant</span>
+        <div class="chips">${VARIANTS.map((v) => `<button type="button" class="chip" data-v="${v}" aria-pressed="${a.variant === v}">${v}</button>`).join('')}</div>
+        <label class="toggle"><input type="checkbox" id="all-shiny" ${a.shiny ? 'checked' : ''}> Shiny only</label>
+      </div>
       <div id="all-grid"></div>
       <div class="all-more" id="all-more"></div>
     </section>`;
@@ -494,6 +511,7 @@ function allItemsList() {
   const list = state.latest.items.filter((it) => {
     if (a.cat.startsWith('cls:')) { if (it.cl !== a.cat.slice(4)) return false; }
     else if (a.cat !== 'All' && it.c !== a.cat) return false;
+    if (!variantMatches(it, a.variant, a.shiny)) return false;
     return matches(it, words);
   });
   const mv = (it) => (it.m && it.m[1]) || 0;
@@ -550,6 +568,16 @@ function bindAllItems() {
   });
   document.getElementById('all-cat').addEventListener('change', (e) => { state.all.cat = e.target.value; state.all.shown = 48; drawAllGrid(); });
   document.getElementById('all-sort').addEventListener('change', (e) => { state.all.sort = e.target.value; state.all.shown = 48; drawAllGrid(); });
+  const variantRow = document.getElementById('all-variant');
+  variantRow.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    state.all.variant = chip.dataset.v;
+    state.all.shown = 48;
+    variantRow.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+    drawAllGrid();
+  });
+  document.getElementById('all-shiny').addEventListener('change', (e) => { state.all.shiny = e.target.checked; state.all.shown = 48; drawAllGrid(); });
   document.getElementById('all-more').addEventListener('click', (e) => {
     if (!e.target.closest('#all-more-btn')) return;
     state.all.shown += 48;
@@ -727,12 +755,7 @@ function filteredItems() {
   let list = state.latest.items.filter((it) => {
     if (f.cat !== 'All' && it.c !== f.cat) return false;
     if (f.cat === 'Pet' && f.cls !== 'All' && it.cl !== f.cls) return false;
-    // Picking Normal, Golden or Rainbow hides shiny versions unless "Shiny only" is ticked.
-    if (f.variant !== 'All' && it.s && !f.shiny) return false;
-    if (f.variant === 'Normal' && it.v) return false;
-    if (f.variant === 'Golden' && it.v !== 1) return false;
-    if (f.variant === 'Rainbow' && it.v !== 2) return false;
-    if (f.shiny && !it.s) return false;
+    if (!variantMatches(it, f.variant, f.shiny)) return false;
     return matches(it, words);
   });
   const key = f.sort;

@@ -498,12 +498,13 @@ function drawBookmarkGrid() {
 // One item card: picture, name, RAP with its last move, a mini chart, exists.
 // Cards normally show the change from the previous RAP. When the grid is sorted by a
 // time window (1h, 12h, 24h), they show that window's change instead.
-const WINDOW_SORTS = { h1: '1h', d12: '12h', d1: '24h' };
+const WINDOW_SORTS = { h1: '1h', d12: '12h', d1: '24h', d3: '3-day', d7: '7-day' };
+const WINDOW_HOURS = { h1: 1, d12: 12, d1: 24, d3: 72, d7: 168 };
 
 function cardHtml(it, range, sort) {
   const win = WINDOW_SORTS[sort];
   const change = win
-    ? `<span class="bm-change" title="RAP change over the last ${win}">${it[sort] != null ? pctHtml(it[sort], { plain: true }) : '<span class="flat">—</span>'}</span>`
+    ? `<span class="bm-change" title="RAP change over the last ${WINDOW_HOURS[sort]} hours">${it[sort] != null ? pctHtml(it[sort], { plain: true }) : '<span class="flat">—</span>'}</span>`
     : `<span class="bm-change" title="${esc(moveText(it) || 'RAP has not changed since tracking started')}">${it.m && it.m[1] ? pctHtml(it.m[1], { plain: true }) : '<span class="flat">—</span>'}</span>`;
   const foot = win ? `${win} change` : it.m && it.m[1] ? `vs last RAP · ${shortTime(it.m[0])}` : 'No RAP change yet';
   return `
@@ -529,6 +530,8 @@ const ALL_SORTS = [
   ['h1', 'Best 1h (% up)'],
   ['d12', 'Best 12h (% up)'],
   ['d1', 'Best 24h (% up)'],
+  ['d3', 'Best 3 days (% up)'],
+  ['d7', 'Best 7 days (% up)'],
   ['e', 'Most exist'],
   ['n', 'Name A–Z'],
 ];
@@ -603,6 +606,8 @@ function allItemsList() {
     h1: (x, y) => (y.h1 ?? -Infinity) - (x.h1 ?? -Infinity) || y.r - x.r,
     d12: (x, y) => (y.d12 ?? -Infinity) - (x.d12 ?? -Infinity) || y.r - x.r,
     d1: (x, y) => (y.d1 ?? -Infinity) - (x.d1 ?? -Infinity) || y.r - x.r,
+    d3: (x, y) => (y.d3 ?? -Infinity) - (x.d3 ?? -Infinity) || y.r - x.r,
+    d7: (x, y) => (y.d7 ?? -Infinity) - (x.d7 ?? -Infinity) || y.r - x.r,
     e: (x, y) => (y.e ?? -1) - (x.e ?? -1),
     n: (x, y) => displayName(x).localeCompare(displayName(y)),
   };
@@ -613,7 +618,7 @@ function allItemsList() {
 function windowNote(sort) {
   const win = WINDOW_SORTS[sort];
   if (!win) return '';
-  const spanH = { '1h': 1, '12h': 12, '24h': 24 }[win];
+  const spanH = WINDOW_HOURS[sort];
   const trackedH = (state.latest.updated - firstSnapshot()) / 3600;
   if (trackedH >= spanH) return '';
   return `<p class="muted window-note">Tracking started ${Math.max(1, Math.floor(trackedH))} hour${Math.floor(trackedH) === 1 ? '' : 's'} ago, so "${win}" changes cover that shorter period for now.</p>`;

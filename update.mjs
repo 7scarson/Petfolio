@@ -371,7 +371,6 @@ async function main() {
     // fall back to its first reading so new items and a young tracker still get a number.
     const rapAgo = (span) => (valueAt(shard[key], SNAP_TS - span) ?? shard[key][0])[1];
     const move = lastMove(shard[key]);
-    const week = valueAt(shard[key], SNAP_TS - 7 * DAY);
     const cls = row.category === 'Pet' ? catalog.classes[cd.id] || petClassFromName(cd.id) : null;
 
     items.push({
@@ -388,7 +387,8 @@ async function main() {
       h1: pct(row.value, rapAgo(HOUR)),
       d12: pct(row.value, rapAgo(12 * HOUR)),
       d1: pct(row.value, rapAgo(DAY)),
-      d7: pct(row.value, week?.[1]),
+      d3: pct(row.value, rapAgo(3 * DAY)),
+      d7: pct(row.value, rapAgo(7 * DAY)),
       e1: day && day[2] != null && exists != null ? exists - day[2] : null,
       ...(move && move[1] != null ? { m: move } : {}),
       ...((dm) => (dm ? { dm } : {}))(demandSignal(shard[key], move, row.value, exists)),

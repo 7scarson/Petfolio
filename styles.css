@@ -616,6 +616,24 @@ th button.sort[data-active="true"] { color: var(--accent); }
 .last-move { display: flex; flex-direction: column; gap: 2px; }
 .last-move small { font: 500 12px var(--font-body); color: var(--muted); }
 
+/* ---------- all items as cards ---------- */
+.all-controls { display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.all-search { flex: 1 1 220px; min-width: 0; }
+.all-search input, .all-select select {
+  font: 600 14px var(--font-body);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+}
+.all-search input { width: 100%; }
+.all-search input:focus, .all-select select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.all-select { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.all-select select { text-transform: none; letter-spacing: 0; max-width: 60vw; }
+.all-more { display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 16px; font-size: 13px; color: var(--muted); }
+.all-more:empty { display: none; }
+
 /* ---------- footer ---------- */
 .footer {
   border-top: 1px solid var(--line);

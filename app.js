@@ -17,6 +17,8 @@ const state = {
   filters: { q: '', cat: 'All', cls: 'All', variant: 'All', shiny: false, sort: 'r', dir: -1, page: 0 },
   home: { moverClass: 'Huge', moverDir: 'up', sentClass: 'Huge', bmRange: loadStore('petfolio:bmRange', '7D') },
   chartRange: loadStore('petfolio:range', '7D'),
+  all: { range: loadStore('petfolio:allRange', '1D'), cat: 'All', sort: 'r', q: '', shown: 48 },
+  sparks: new Map(), // range -> Promise<string[] | null>
 };
 
 const view = document.getElementById('view');
@@ -201,12 +203,12 @@ function sparkline(values, h = 40) {
   if (pts.length < 2) return '';
   const min = Math.min(...pts);
   const max = Math.max(...pts);
-  const span = max - min || 1;
+  const span = max - min;
   const w = 200;
-  const coords = pts.map((v, i) => [(i / (pts.length - 1)) * w, h - 3 - ((v - min) / span) * (h - 6)]);
+  const coords = pts.map((v, i) => [(i / (pts.length - 1)) * w, span ? h - 3 - ((v - min) / span) * (h - 6) : h / 2]);
   const line = coords.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join('');
-  const rising = pts.at(-1) >= pts[0];
-  const color = rising ? 'var(--gain)' : 'var(--loss)';
+  const last = pts.at(-1);
+  const color = last > pts[0] ? 'var(--gain)' : last < pts[0] ? 'var(--loss)' : 'var(--muted)';
   const [lx, ly] = coords.at(-1);
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
     <path d="${line}L${w},${h}L0,${h}Z" fill="${color}" fill-opacity=".12" stroke="none"/>
@@ -291,13 +293,7 @@ function renderHome() {
       </div>
     </section>
 
-    <section class="panel">
-      <div class="section-head panel-pad" style="margin:0;padding-bottom:4px">
-        <h2>Most valuable</h2>
-        <a href="#/items">Browse all ${count.toLocaleString()} items →</a>
-      </div>
-      <div class="table-wrap" id="home-table">${tableHtml([...state.latest.items].sort((a, b) => b.r - a.r).slice(0, 15), { rank: true })}</div>
-    </section>
+    ${allItemsHtml()}
   `;
 
   const drawMovers = () => {
@@ -342,7 +338,7 @@ function renderHome() {
   drawMovers();
   drawSentiment();
   bindHomeBookmarks();
-  bindTable(document.getElementById('home-table'));
+  bindAllItems();
 }
 
 function bindSeg(id, onChange) {
@@ -409,16 +405,7 @@ function drawBookmarkGrid() {
     return;
   }
   const range = state.home.bmRange;
-  grid.innerHTML = `<div class="bm-grid">${list.map((it) => `
-    <article class="bm-card">
-      <a class="bm-link" href="${itemHref(it)}">
-        <div class="bm-top">${iconHtml(it, 'icon-md')}<div class="bm-name"><b>${esc(displayName(it))}</b>${badgesHtml(it)}</div></div>
-        <div class="bm-value">${rapHtml(it, { unit: true })}<span class="bm-change" title="${esc(moveText(it) || 'RAP has not changed since tracking started')}">${it.m && it.m[1] ? pctHtml(it.m[1], { plain: true }) : '<span class="flat">—</span>'}</span></div>
-        <div class="bm-spark" data-spark="${esc(it.k)}"><span class="bm-loading">Loading ${range} history…</span></div>
-        <div class="bm-foot"><span>${compact(it.e)} exist</span><span>${it.m && it.m[1] ? `vs last RAP · ${shortTime(it.m[0])}` : 'No RAP change yet'}</span></div>
-      </a>
-      ${starHtml(it)}
-    </article>`).join('')}</div>`;
+  grid.innerHTML = `<div class="bm-grid">${list.map((it) => cardHtml(it, range)).join('')}</div>`;
 
   for (const it of list) {
     history(it.k).then((points) => {
@@ -429,6 +416,150 @@ function drawBookmarkGrid() {
       spark.innerHTML = svg || '<span class="bm-loading">History builds up as updates come in.</span>';
     });
   }
+}
+
+// One item card: picture, name, RAP with its last move, a mini chart, exists.
+function cardHtml(it, range) {
+  return `
+    <article class="bm-card">
+      <a class="bm-link" href="${itemHref(it)}">
+        <div class="bm-top">${iconHtml(it, 'icon-md')}<div class="bm-name"><b>${esc(displayName(it))}</b>${badgesHtml(it)}</div></div>
+        <div class="bm-value">${rapHtml(it, { unit: true })}<span class="bm-change" title="${esc(moveText(it) || 'RAP has not changed since tracking started')}">${it.m && it.m[1] ? pctHtml(it.m[1], { plain: true }) : '<span class="flat">—</span>'}</span></div>
+        <div class="bm-spark" data-spark="${esc(it.k)}"><span class="bm-loading">Loading ${range} history…</span></div>
+        <div class="bm-foot"><span>${compact(it.e)} exist</span><span>${it.m && it.m[1] ? `vs last RAP · ${shortTime(it.m[0])}` : 'No RAP change yet'}</span></div>
+      </a>
+      ${starHtml(it)}
+    </article>`;
+}
+
+// ---------- home: every item as cards ----------
+const SPARK_LEVELS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+const ALL_SORTS = [
+  ['r', 'Highest RAP'],
+  ['rl', 'Lowest RAP'],
+  ['mu', 'Biggest last rise'],
+  ['md', 'Biggest last drop'],
+  ['recent', 'Most recently moved'],
+  ['d1', 'Best 24h'],
+  ['e', 'Most exist'],
+  ['n', 'Name A–Z'],
+];
+
+function loadSparks(range) {
+  if (!state.sparks.has(range)) {
+    state.sparks.set(range, getJson(`sparks-${range}.json`)
+      .then((d) => (d && d.count === state.latest.items.length ? d.sparks : null))
+      .catch(() => null));
+  }
+  return state.sparks.get(range);
+}
+
+function allItemsHtml() {
+  const a = state.all;
+  const counts = new Map();
+  for (const it of state.latest.items) counts.set(it.c, (counts.get(it.c) || 0) + 1);
+  const cats = [...counts.entries()].sort((x, y) => y[1] - x[1]);
+  const opt = (v, label, cur) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(label)}</option>`;
+  return `
+    <section class="panel panel-pad" aria-labelledby="all-title">
+      <div class="section-head">
+        <div>
+          <h2 id="all-title">All pets and items</h2>
+          <p class="muted bm-sub">${state.latest.count.toLocaleString()} tracked · <a href="#/items">switch to table view</a></p>
+        </div>
+        <div class="seg" role="group" aria-label="History range" id="all-range">
+          ${BM_RANGES.map((r) => `<button type="button" data-v="${r}" aria-pressed="${a.range === r}">${r}</button>`).join('')}
+        </div>
+      </div>
+      <div class="all-controls">
+        <label class="all-search"><span class="visually-hidden">Filter cards</span>
+          <input id="all-q" type="search" placeholder="Filter by name" value="${esc(a.q)}" autocomplete="off" spellcheck="false"></label>
+        <label class="all-select"><span>Show</span>
+          <select id="all-cat">
+            ${opt('All', 'Everything', a.cat)}
+            ${PET_CLASSES.map((c) => opt(`cls:${c}`, `${c} pets`, a.cat)).join('')}
+            ${cats.map(([c, n]) => opt(c, `${catLabel(c)} (${n.toLocaleString()})`, a.cat)).join('')}
+          </select></label>
+        <label class="all-select"><span>Sort</span>
+          <select id="all-sort">${ALL_SORTS.map(([v, l]) => opt(v, l, a.sort)).join('')}</select></label>
+      </div>
+      <div id="all-grid"></div>
+      <div class="all-more" id="all-more"></div>
+    </section>`;
+}
+
+function allItemsList() {
+  const a = state.all;
+  const words = searchWords(a.q);
+  const list = state.latest.items.filter((it) => {
+    if (a.cat.startsWith('cls:')) { if (it.cl !== a.cat.slice(4)) return false; }
+    else if (a.cat !== 'All' && it.c !== a.cat) return false;
+    return matches(it, words);
+  });
+  const mv = (it) => (it.m && it.m[1]) || 0;
+  const sorters = {
+    r: (x, y) => y.r - x.r,
+    rl: (x, y) => x.r - y.r,
+    mu: (x, y) => mv(y) - mv(x) || y.r - x.r,
+    md: (x, y) => mv(x) - mv(y) || y.r - x.r,
+    recent: (x, y) => ((y.m && y.m[0]) || 0) - ((x.m && x.m[0]) || 0) || y.r - x.r,
+    d1: (x, y) => (y.d1 ?? -Infinity) - (x.d1 ?? -Infinity) || y.r - x.r,
+    e: (x, y) => (y.e ?? -1) - (x.e ?? -1),
+    n: (x, y) => displayName(x).localeCompare(displayName(y)),
+  };
+  return list.sort(sorters[a.sort] || sorters.r);
+}
+
+function drawAllGrid() {
+  const grid = document.getElementById('all-grid');
+  if (!grid) return;
+  const a = state.all;
+  const list = allItemsList();
+  const shown = list.slice(0, a.shown);
+  grid.innerHTML = shown.length
+    ? `<div class="bm-grid">${shown.map((it) => cardHtml(it, a.range)).join('')}</div>`
+    : '<p class="empty">No pets or items match.</p>';
+  document.getElementById('all-more').innerHTML = list.length > shown.length
+    ? `<span>Showing ${shown.length.toLocaleString()} of ${list.length.toLocaleString()}</span><button class="btn" type="button" id="all-more-btn">Show ${Math.min(48, list.length - shown.length)} more</button>`
+    : list.length ? `<span>Showing all ${list.length.toLocaleString()}</span>` : '';
+
+  const range = a.range;
+  loadSparks(range).then((sparks) => {
+    if (state.all.range !== range) return;
+    for (const it of shown) {
+      const el = grid.querySelector(`[data-spark="${CSS.escape(it.k)}"]`);
+      if (!el) continue;
+      const code = sparks ? sparks[it._i] : null;
+      if (code == null) { el.innerHTML = '<span class="bm-loading">History builds up as updates come in.</span>'; continue; }
+      const values = code ? [...code].map((c) => (c === '-' ? null : SPARK_LEVELS.indexOf(c))) : [1, 1];
+      el.innerHTML = sparkline(values, 48);
+    }
+  });
+}
+
+function bindAllItems() {
+  bindSeg('all-range', (v) => {
+    state.all.range = v;
+    saveStore('petfolio:allRange', v);
+    drawAllGrid();
+  });
+  let timer;
+  document.getElementById('all-q').addEventListener('input', (e) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { state.all.q = e.target.value.trim(); state.all.shown = 48; drawAllGrid(); }, 150);
+  });
+  document.getElementById('all-cat').addEventListener('change', (e) => { state.all.cat = e.target.value; state.all.shown = 48; drawAllGrid(); });
+  document.getElementById('all-sort').addEventListener('change', (e) => { state.all.sort = e.target.value; state.all.shown = 48; drawAllGrid(); });
+  document.getElementById('all-more').addEventListener('click', (e) => {
+    if (!e.target.closest('#all-more-btn')) return;
+    state.all.shown += 48;
+    drawAllGrid();
+  });
+  document.getElementById('all-grid').addEventListener('click', (e) => {
+    const fav = e.target.closest('[data-fav]');
+    if (fav) { e.preventDefault(); toggleFav(fav.dataset.fav); }
+  });
+  drawAllGrid();
 }
 
 // "5:12 PM" for today, "Nov 3, 5:12 PM" for older times.
@@ -911,7 +1042,10 @@ async function boot() {
     view.innerHTML = `<div class="empty"><h2>No market data yet</h2><p>The first hourly update hasn't finished. Open the repository's Actions tab and run “Update RAP data”, then reload this page in a few minutes.</p></div>`;
     return;
   }
-  for (const it of state.latest.items) state.byKey.set(it.k, it);
+  state.latest.items.forEach((it, i) => {
+    it._i = i; // position in the mini chart files
+    state.byKey.set(it.k, it);
+  });
   state.market = await getJson('market.json').catch(() => ({ series: [] }));
   document.getElementById('updated-line').textContent =
     `Last update ${new Date(lastRun() * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} (${timeAgo(lastRun())}). Checks for new data every 5 minutes.`;

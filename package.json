@@ -5,7 +5,7 @@
   "description": "Hourly RAP and exists tracker for Pet Simulator 99, built on the official BIG Games API.",
   "scripts": {
     "update": "node scripts/update.mjs store",
-    "build": "rm -rf _site && mkdir -p _site/data && cp -r site/. _site/ && cp store/latest.json store/market.json _site/data/ && cp -r store/history _site/data/",
+    "build": "rm -rf _site && mkdir -p _site/data && cp index.html app.js styles.css shard.js favicon.svg _site/ && cp store/latest.json store/market.json store/sparks-*.json _site/data/ && cp -r store/history _site/data/",
     "serve": "npm run build && npx --yes serve@14.2.4 _site"
   }
 }

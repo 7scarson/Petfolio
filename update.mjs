@@ -247,6 +247,30 @@ function valueAt(points, ts) {
   return found;
 }
 
+// ---------- mini charts ----------
+// Small line charts for the Market page cards, one file per range. Each item gets a short
+// string: its RAP sampled evenly across the range, scaled to 62 levels (0-9, A-Z, a-z),
+// with "-" where tracking hadn't started yet and "" when RAP never moved.
+const SPARK_RANGES = { '1D': [DAY, 48], '7D': [7 * DAY, 42], '30D': [30 * DAY, 30] };
+const SPARK_LEVELS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
+function sparkString(series, span, count) {
+  const start = SNAP_TS - span;
+  const values = [];
+  let j = -1;
+  for (let i = 0; i < count; i++) {
+    const t = start + (span * i) / (count - 1);
+    while (j + 1 < series.length && series[j + 1][0] <= t) j++;
+    values.push(j >= 0 ? series[j][1] : null);
+  }
+  const known = values.filter((v) => v != null);
+  if (known.length < 2) return '';
+  const min = Math.min(...known);
+  const max = Math.max(...known);
+  if (min === max) return '';
+  return values.map((v) => (v == null ? '-' : SPARK_LEVELS[Math.round(((v - min) / (max - min)) * 61)])).join('');
+}
+
 const pct = (now, then) => (then && then > 0 && now != null ? Math.round(((now - then) / then) * 10000) / 100 : null);
 
 // The most recent time RAP actually changed: [time, percent change from the value before it].
@@ -303,6 +327,7 @@ async function main() {
   );
 
   const items = [];
+  const sparks = Object.fromEntries(Object.keys(SPARK_RANGES).map((r) => [r, []]));
   for (const row of rapRaw) {
     const cd = row.configData || {};
     if (cd.id == null || typeof row.value !== 'number') continue;
@@ -337,6 +362,7 @@ async function main() {
       ...(move && move[1] != null ? { m: move } : {}),
       f: shard[key][0][0],
     });
+    for (const [range, [span, count]] of Object.entries(SPARK_RANGES)) sparks[range].push(sparkString(shard[key], span, count));
   }
 
   // Market-wide numbers
@@ -418,6 +444,8 @@ async function main() {
   await Promise.all(shards.map((s, i) => writeJson(`history/${String(i).padStart(2, '0')}.json`, s)));
   await writeJson('market.json', market);
   await writeJson('catalog.json', catalog);
+  await Promise.all(Object.entries(sparks).map(([range, list]) =>
+    writeJson(`sparks-${range}.json`, { updated: SNAP_TS, count: items.length, sparks: list })));
   await writeJson('latest.json', latest);
 
   console.log(`Saved ${items.length} items. Market value ${marketValue.toLocaleString()}.`);

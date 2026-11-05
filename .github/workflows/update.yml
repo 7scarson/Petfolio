@@ -61,7 +61,7 @@ jobs:
         run: |
           mkdir -p _site/data
           cp index.html app.js styles.css shard.js favicon.svg _site/
-          cp store/latest.json store/market.json _site/data/
+          cp store/latest.json store/market.json store/sparks-*.json _site/data/
           cp -r store/history _site/data/
 
       - uses: actions/configure-pages@v5

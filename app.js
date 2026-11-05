@@ -14,10 +14,10 @@ const state = {
   byKey: new Map(),
   history: new Map(), // shard file -> Promise<object>
   favs: new Set(loadStore('petfolio:favs', [])),
-  filters: { q: '', cat: 'All', cls: 'All', variant: 'All', shiny: false, sort: 'r', dir: -1, page: 0 },
+  filters: { q: '', cat: 'All', cls: 'All', price: 'All', variant: 'All', shiny: false, sort: 'r', dir: -1, page: 0 },
   home: { moverClass: 'Huge', moverDir: 'up', sentClass: 'Huge', bmRange: loadStore('petfolio:bmRange', '7D') },
   chartRange: loadStore('petfolio:range', '7D'),
-  all: { range: loadStore('petfolio:allRange', '1D'), cat: 'All', variant: 'All', shiny: false, sort: 'r', q: '', shown: 48 },
+  all: { range: loadStore('petfolio:allRange', '1D'), cat: 'All', price: 'All', variant: 'All', shiny: false, sort: 'r', q: '', shown: 48 },
   sparks: new Map(), // range -> Promise<string[] | null>
 };
 
@@ -46,8 +46,11 @@ function compact(n) {
   for (const [size, suffix] of units) {
     if (abs >= size) {
       const v = n / size;
-      const digits = Math.abs(v) >= 100 ? 0 : Math.abs(v) >= 10 ? 1 : 2;
-      return v.toFixed(digits).replace(/\.0+$|(\.\d*[1-9])0+$/, '$1') + suffix;
+      // Cut off extra digits instead of rounding, so 249.6M never shows as "250M"
+      // and a value always displays inside its price range.
+      const digits = Math.abs(v) >= 10 ? 1 : 2;
+      const f = 10 ** digits;
+      return (Math.trunc(v * f) / f).toFixed(digits).replace(/\.0+$|(\.\d*[1-9])0+$/, '$1') + suffix;
     }
   }
   return Math.round(n).toLocaleString();
@@ -391,6 +394,28 @@ function demandHtml(it) {
     </section>`;
 }
 
+// ---------- price range filter (shared by the Items table and Market cards) ----------
+// Lower bound included, upper bound excluded.
+const PRICE_RANGES = [
+  ['All', 'Any price', 0, Infinity],
+  ['0-100k', '0 – 100K', 0, 1e5],
+  ['100k-1m', '100K – 1M', 1e5, 1e6],
+  ['1m-10m', '1M – 10M', 1e6, 1e7],
+  ['10m-20m', '10M – 20M', 1e7, 2e7],
+  ['20m-50m', '20M – 50M', 2e7, 5e7],
+  ['50m-100m', '50M – 100M', 5e7, 1e8],
+  ['100m-250m', '100M – 250M', 1e8, 2.5e8],
+  ['250m-500m', '250M – 500M', 2.5e8, 5e8],
+  ['500m-1b', '500M – 1B', 5e8, 1e9],
+  ['1b-5b', '1B – 5B', 1e9, 5e9],
+  ['5b-20b', '5B – 20B', 5e9, 2e10],
+  ['20b+', '20B+', 2e10, Infinity],
+];
+function priceMatches(it, id) {
+  const range = PRICE_RANGES.find((r) => r[0] === id);
+  return !range || (it.r >= range[2] && it.r < range[3]);
+}
+
 // ---------- variant filter (shared by the Items table and Market cards) ----------
 const VARIANTS = ['All', 'Normal', 'Golden', 'Rainbow'];
 // Picking Normal, Golden or Rainbow hides shiny versions unless "Shiny only" is ticked.
@@ -532,6 +557,8 @@ function allItemsHtml() {
             ${PET_CLASSES.map((c) => opt(`cls:${c}`, `${c} pets`, a.cat)).join('')}
             ${cats.map(([c, n]) => opt(c, `${catLabel(c)} (${n.toLocaleString()})`, a.cat)).join('')}
           </select></label>
+        <label class="all-select"><span>Price</span>
+          <select id="all-price">${PRICE_RANGES.map(([v, l]) => opt(v, l, a.price)).join('')}</select></label>
         <label class="all-select"><span>Sort</span>
           <select id="all-sort">${ALL_SORTS.map(([v, l]) => opt(v, l, a.sort)).join('')}</select></label>
       </div>
@@ -552,6 +579,7 @@ function allItemsList() {
     if (a.cat.startsWith('cls:')) { if (it.cl !== a.cat.slice(4)) return false; }
     else if (a.cat !== 'All' && it.c !== a.cat) return false;
     if (!variantMatches(it, a.variant, a.shiny)) return false;
+    if (!priceMatches(it, a.price)) return false;
     return matches(it, words);
   });
   const mv = (it) => (it.m && it.m[1]) || 0;
@@ -608,6 +636,7 @@ function bindAllItems() {
   });
   document.getElementById('all-cat').addEventListener('change', (e) => { state.all.cat = e.target.value; state.all.shown = 48; drawAllGrid(); });
   document.getElementById('all-sort').addEventListener('change', (e) => { state.all.sort = e.target.value; state.all.shown = 48; drawAllGrid(); });
+  document.getElementById('all-price').addEventListener('change', (e) => { state.all.price = e.target.value; state.all.shown = 48; drawAllGrid(); });
   const variantRow = document.getElementById('all-variant');
   variantRow.addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
@@ -796,6 +825,7 @@ function filteredItems() {
     if (f.cat !== 'All' && it.c !== f.cat) return false;
     if (f.cat === 'Pet' && f.cls !== 'All' && it.cl !== f.cls) return false;
     if (!variantMatches(it, f.variant, f.shiny)) return false;
+    if (!priceMatches(it, f.price)) return false;
     return matches(it, words);
   });
   const key = f.sort;
@@ -832,6 +862,9 @@ function renderItems() {
         </div>
         <div class="filter-row" id="pet-filters" ${f.cat === 'Pet' ? '' : 'hidden'}><span class="filter-label">Pet type</span>
           <div class="chips">${['All', ...PET_CLASSES].map((c) => chip('cls', c, c)).join('')}</div>
+        </div>
+        <div class="filter-row"><span class="filter-label">Price</span>
+          <div class="chips">${PRICE_RANGES.map(([v, l]) => chip('price', v, v === 'All' ? 'Any' : l)).join('')}</div>
         </div>
         <div class="filter-row"><span class="filter-label">Variant</span>
           <div class="chips">${['All', 'Normal', 'Golden', 'Rainbow'].map((v) => chip('variant', v, v)).join('')}</div>
